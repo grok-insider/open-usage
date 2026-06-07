@@ -52,7 +52,9 @@ fn print_help() {
          \topenusage waybar               Waybar custom-module JSON (one shot)\n\
          \topenusage json                 Raw JSON of detected provider outputs\n\
          \topenusage serve [--interval S] Local HTTP API on 127.0.0.1:6736\n\n\
-         PROVIDERS: claude, codex, cursor, grok, opencode-go"
+         PROVIDERS: claude, codex, cursor, grok, opencode-go, amp, zai, minimax,\n\
+         \t           synthetic, kimi, copilot, factory, devin,\n\
+         \t           jetbrains-ai-assistant, kiro, antigravity, perplexity"
     );
 }
 
