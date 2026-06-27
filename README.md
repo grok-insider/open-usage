@@ -1,13 +1,20 @@
 # open-usage
 
-Linux-native AI coding subscription usage tracker. A single Rust binary that
-reads your local AI CLI credentials, queries each provider's usage API, and
-prints the result for the terminal, a Waybar/EWW module, or a local HTTP API.
+[![CI](https://github.com/grok-insider/open-usage/actions/workflows/ci.yml/badge.svg)](https://github.com/grok-insider/open-usage/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/grok-insider/open-usage?sort=semver)](https://github.com/grok-insider/open-usage/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-blue)
+
+A cross-platform AI coding subscription usage tracker (Linux-first). A single Rust
+binary that reads your local AI CLI credentials, queries each provider's usage
+API, and prints the result for the terminal, a status bar (Waybar/EWW), or a local
+HTTP API.
 
 No webview, no tray dependency, no Electron — just a fast CLI/daemon that fits a
-Wayland/Hyprland setup. Credentials are read the Linux way: XDG paths, plaintext
-credential files, SQLite state DBs, the GitHub CLI, and the Secret Service via
-`secret-tool`.
+Wayland/Hyprland setup. Credentials are read from where each CLI already stores
+them: XDG paths and plaintext files, SQLite state DBs, the GitHub CLI, and the OS
+secret store (Secret Service via `secret-tool` on Linux, Keychain on macOS,
+Credential Manager on Windows).
 
 ```
 $ openusage probe
@@ -52,13 +59,15 @@ line tracks.
 ## Cost estimation
 
 For **Claude** and **Codex**, open-usage estimates spend from the CLIs' local
-session logs (`~/.claude/projects`, `~/.codex/sessions`) — no API needed. It
-prices each message's token usage against a model price table built from
+session logs (Claude: `$CLAUDE_CONFIG_DIR/projects`, `~/.config/claude/projects`,
+`~/.claude/projects`; Codex: `~/.codex/sessions`) — no API needed. It prices each
+message's token usage against a model price table built from
 [LiteLLM](https://github.com/BerriAI/litellm)'s pricing data — an embedded
-snapshot for offline use, refreshed from upstream at most once a week (cached
-in `~/.cache/open-usage/`, set `OPENUSAGE_OFFLINE=1` to disable) so newly
-released models are priced without updating the binary — producing a
-`Last 30 Days` total and a `Usage Trend` daily sparkline.
+snapshot for offline use, refreshed from upstream at most once a week (cached in
+`~/.cache/open-usage/`) so newly released models are priced without updating the
+binary. Set `OPENUSAGE_OFFLINE=1` to skip the weekly remote refresh (the embedded
+snapshot and any existing cache still price). The result is a `Last 30 Days` total
+and a `Usage Trend` daily sparkline.
 
 It's built to be cheap on repeated runs: append-only logs older than the window
 are skipped by mtime, only token-bearing lines are parsed (via a `memchr`
@@ -73,11 +82,27 @@ with `~/.config/open-usage/pricing.json` (same shape as the LiteLLM data, e.g.
 Other providers surface dollar figures wherever their API returns them (Cursor
 credits/on-demand, Amp balance, Claude extra usage, OpenCode Go local spend).
 
-## Install (Nix / NixOS)
+## Install
+
+### Prebuilt binaries
+
+Each [GitHub Release](https://github.com/grok-insider/open-usage/releases) attaches
+a prebuilt `openusage` for **Linux** (x86_64/aarch64, static musl), **macOS**
+(x86_64/arm64), and **Windows** (x86_64) — `tar.gz` on Unix, `zip` on Windows,
+each with a `.sha256`. Download the archive for your platform, verify, extract,
+and put `openusage` on your `PATH`:
+
+```sh
+sha256sum -c openusage-*-x86_64-unknown-linux-musl.tar.gz.sha256
+tar -xzf openusage-*-x86_64-unknown-linux-musl.tar.gz
+install -Dm755 openusage ~/.local/bin/openusage
+```
+
+### Nix / NixOS
 
 open-usage ships as a Nix flake with prebuilt closures on a public
 [Cachix](https://cachix.org) cache, so installing does **not** require building
-Rust locally. Prebuilt for `x86_64-linux` and `aarch64-linux`.
+Rust locally. The Nix package targets `x86_64-linux` and `aarch64-linux`.
 
 Trust the binary cache once (otherwise Nix rebuilds from source):
 
@@ -91,9 +116,7 @@ nix.settings = {
 };
 ```
 
-Or, with the Cachix CLI: `cachix use grok-insider`.
-
-Then run or install:
+Or, with the Cachix CLI: `cachix use grok-insider`. Then run or install:
 
 ```sh
 nix run github:grok-insider/open-usage -- probe     # try it without installing
@@ -104,7 +127,7 @@ The flake also advertises the cache via `nixConfig.extra-substituters`, so
 `nix run github:grok-insider/open-usage` offers to use it (accept the prompt or pass
 `--accept-flake-config`).
 
-### Home Manager
+#### Home Manager
 
 ```nix
 {
@@ -128,8 +151,8 @@ cargo build --release
 # binary: ./target/release/openusage
 ```
 
-`secret-tool` (from `libsecret`) is only needed if a provider stores its token
-in the Secret Service rather than a file.
+On Linux, `secret-tool` (from `libsecret`) is only needed if a provider stores its
+token in the Secret Service rather than a file.
 
 ## Usage
 
@@ -137,22 +160,26 @@ in the Secret Service rather than a file.
 openusage list                 # show providers and whether they're detected
 openusage probe                # probe every detected provider (human output)
 openusage probe claude         # probe a single provider (forces it)
+openusage probe --force        # probe ALL providers, detected or not
 openusage waybar               # emit Waybar custom-module JSON (one shot)
 openusage json                 # raw JSON of all detected provider outputs
 openusage serve [--interval S] # run the local HTTP API on 127.0.0.1:6736
+openusage update-pricing [out] # fetch + filter the LiteLLM price table (advanced)
 ```
 
-`probe` without an id only runs providers it detects on this machine. Pass an id
-(e.g. `openusage probe cursor`) to force a specific one even if undetected.
+With no arguments, `openusage` runs `probe`. `probe` without an id only runs
+providers it detects on this machine; pass an id (e.g. `openusage probe cursor`)
+to force a specific one, or `--force` to run them all. `update-pricing` is a
+maintenance command used to refresh the embedded `src/pricing-data.json`.
 
 ## Providers
 
-| Provider                 | Source on Linux                                                  | Verified |
+| Provider                 | Credential source                                                | Verified |
 |--------------------------|-----------------------------------------------------------------|----------|
-| `claude`                 | `~/.claude/.credentials.json` (or `$CLAUDE_CONFIG_DIR`)          | live     |
+| `claude`                 | `~/.claude/.credentials.json` (or `$CLAUDE_CONFIG_DIR`; Keychain on macOS) | live     |
 | `codex`                  | `$CODEX_HOME` / `~/.config/codex` / `~/.codex` `auth.json`       | live     |
 | `grok`                   | `~/.grok/auth.json` (Grok CLI / SuperGrok Build)                 | live     |
-| `copilot`                | `gh auth token` / Secret Service / `~/.config/gh/hosts.yml`     | live     |
+| `copilot`                | `gh auth token` / secret store / `~/.config/gh/hosts.yml`        | live     |
 | `cursor`                 | `~/.config/Cursor/.../state.vscdb` (SQLite)                      | code     |
 | `opencode-go`            | `~/.local/share/opencode/opencode.db` (SQLite)                 | code     |
 | `amp`                    | `~/.local/share/amp/secrets.json`                               | code     |
@@ -165,18 +192,18 @@ openusage serve [--interval S] # run the local HTTP API on 127.0.0.1:6736
 | `jetbrains-ai-assistant` | `~/.config/JetBrains/<IDE>/options/AIAssistantQuotaManager2.xml`| code     |
 | `kiro`                   | `~/.config/Kiro/.../state.vscdb` + `~/.aws/sso/cache`           | code     |
 | `antigravity`            | local language server (discovered via `/proc`)                  | code     |
-| `perplexity`             | macOS-only desktop cache — not available on Linux               | n/a      |
+| `perplexity`             | macOS desktop-app cache (currently inactive)                    | n/a      |
 
 **Verified** column: `live` = validated against the real API; `code` =
 implemented to the documented API shape but not yet confirmed against a live
-account; `n/a` = no Linux data source. If a `code` provider misreports, open an
-issue with its `openusage probe <id>` output.
+account; `n/a` = no usable data source yet. If a `code` provider misreports, open
+an issue with its `openusage probe <id>` output.
 
 ## Local HTTP API
 
 `openusage serve` exposes:
 
-- `GET /usage` — JSON array of the latest provider outputs
+- `GET /usage` (also `GET /`) — JSON array of the latest provider outputs
 - `GET /health` — `{"status":"ok"}`
 
 ```sh
@@ -186,13 +213,17 @@ curl -s http://127.0.0.1:6736/usage | jq
 
 The daemon re-probes on the given interval (seconds, min 30) and serves the
 cached result, so readers (status bars, scripts) get an instant, non-blocking
-response.
+response. It binds to `127.0.0.1` only.
 
 ## Waybar
 
 `openusage waybar` prints `{text, tooltip, class, percentage}`. The `text` is the
-single highest-utilization metric across providers; `class` is
-`ok` / `warning` / `critical` (≥80% → warning, ≥95% → critical) for CSS styling.
+highest-utilization window of your **paid** Claude/Codex/Grok plans — anchored on
+the Session (5h) window, escalating to the Weekly window once Weekly crosses 80%.
+Other providers (Copilot, Cursor, …) and free/guest plans still appear in the
+tooltip but never drive the bar text. `class` is `ok` / `warning` / `critical`
+(≥80% → warning, ≥95% → critical) for CSS styling; it shows `no data` when nothing
+is eligible.
 
 ```jsonc
 // ~/.config/waybar/config
@@ -213,7 +244,8 @@ single highest-utilization metric across providers; `class` is
 ```
 
 > Tip: instead of polling with `interval`, run `openusage serve` once and have a
-> small wrapper curl `127.0.0.1:6736/usage` for a near-instant refresh.
+> small wrapper curl `127.0.0.1:6736/usage` for a near-instant refresh. The same
+> JSON drives an EWW module.
 
 ## Proxy
 
@@ -245,8 +277,9 @@ Optional. Create `~/.config/open-usage/config.json`:
   and used internally by their own apps. They can change or break at any time,
   which will surface as an error line for that provider until the parser is
   updated.
-- **macOS-only providers.** `perplexity` reads a macOS desktop-app cache that
-  has no Linux equivalent, so it never activates on Linux.
+- **Platform-specific providers.** `perplexity` targets a macOS desktop-app cache
+  and currently never activates. Most other sources are Linux/XDG paths; on macOS
+  and Windows, credentials come from the OS secret store where applicable.
 
 ## Architecture & contributing
 
