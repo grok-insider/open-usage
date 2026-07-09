@@ -6,6 +6,7 @@
 //!   openusage waybar               Emit Waybar custom-module JSON (one shot).
 //!   openusage json                 Emit raw JSON of all detected providers.
 //!   openusage serve [--interval S] Run the local HTTP API on 127.0.0.1:6736.
+//!   openusage grok-proxy [--bind A] Capture official Grok API usage to a ledger.
 //!   openusage update-pricing [out] Fetch + filter the upstream price table.
 
 mod activity;
