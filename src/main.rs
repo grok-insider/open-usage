@@ -8,6 +8,8 @@
 //!   openusage serve [--interval S] Run the local HTTP API on 127.0.0.1:6736.
 //!   openusage capture serve        Dual capture proxy (Grok CLI + api.x.ai).
 //!   openusage grok-proxy [...]     Single-listener capture (compat alias).
+//!   openusage auth copilot [...]   Opt-in link a GitHub token for Copilot.
+//!   openusage auth logout copilot  Forget the stored Copilot credential.
 //!   openusage update-pricing [out] Fetch + filter the upstream price table.
 
 mod activity;
@@ -65,6 +67,7 @@ fn main() -> ExitCode {
         "serve" => cmd_serve(rest),
         "capture" => cmd_capture(rest),
         "grok-proxy" => cmd_grok_proxy(rest),
+        "auth" => cmd_auth(rest),
         "update-pricing" => cmd_update_pricing(rest),
         "help" | "-h" | "--help" => {
             print_help();
@@ -91,13 +94,53 @@ fn print_help() {
          \t                               (honors HTTP(S)_PROXY for upstream egress)\n\
          \topenusage grok-proxy [--bind HOST:PORT]\n\
          \t                               Single-listener capture (compat)\n\
+         \topenusage auth copilot         Link Copilot (opt-in; pick gh user or paste)\n\
+         \t  --user LOGIN                 Import token for that gh account\n\
+         \t  --token-stdin                Read token from stdin\n\
+         \topenusage auth logout copilot  Remove the stored Copilot credential\n\
          \topenusage update-pricing [out] Fetch + filter the LiteLLM price table\n\
          \t                               (writes to stdout, or to [out]; used to\n\
          \t                               refresh the embedded src/pricing-data.json)\n\n\
          PROVIDERS: claude, codex, cursor, grok, opencode-go, amp, zai, minimax,\n\
          \t           synthetic, kimi, copilot, factory, devin,\n\
-         \t           jetbrains-ai-assistant, kiro, antigravity, perplexity"
+         \t           jetbrains-ai-assistant, kiro, antigravity, perplexity\n\
+         \t           (copilot requires `openusage auth copilot`)"
     );
+}
+
+fn cmd_auth(args: &[String]) -> ExitCode {
+    match args.first().map(String::as_str) {
+        Some("copilot") => match providers::copilot::cmd_auth(&args[1..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("auth copilot: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("logout") => match args.get(1).map(String::as_str) {
+            Some("copilot") => match providers::copilot::cmd_logout() {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("auth logout copilot: {e}");
+                    ExitCode::FAILURE
+                }
+            },
+            other => {
+                eprintln!(
+                    "unknown auth logout target: {}\nusage: openusage auth logout copilot",
+                    other.unwrap_or("(none)")
+                );
+                ExitCode::FAILURE
+            }
+        },
+        other => {
+            eprintln!(
+                "unknown auth target: {}\nusage:\n  openusage auth copilot [--user LOGIN | --token-stdin]\n  openusage auth logout copilot",
+                other.unwrap_or("(none)")
+            );
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn cmd_list() -> ExitCode {
