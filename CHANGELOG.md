@@ -4,16 +4,9 @@ All notable, user-facing changes to open-usage are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.2](https://github.com/grok-insider/open-usage/compare/v0.0.1...v0.0.2) - 2026-07-14
+## [0.0.2] - 2026-07-14
 
-### Fixed
-
-- *(grok)* fall back to monthly billing when credits omit usage
-
-### Other
-
-- *(grok)* rustfmt assert in billing unit test
-- fix release-plz branch checkout and gate binary uploads
+- Fixed fallback to monthly billing when credits omit usage for some SuperGrok accounts.
 
 ## 0.0.1
 
